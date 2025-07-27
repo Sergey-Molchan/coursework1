@@ -1,0 +1,19 @@
+[project]
+name = "coursework1"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Sergey-Molchan",email = "Molchan2025@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pandas (>=2.3.1,<3.0.0)",
+    "pytest (>=8.4.1,<9.0.0)",
+    "openpyxl (>=3.1.5,<4.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
