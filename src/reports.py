@@ -1,56 +1,65 @@
-from typing import Optional, Dict
 import pandas as pd
 from datetime import datetime, timedelta
-import logging
-import json
-import functools
-
-logger = logging.getLogger(__name__)
+from functools import wraps
 
 
-def report_decorator(func=None, *, filename=None):
-    """Декоратор для сохранения отчётов в файл"""
-
-    def decorator(f):
-        @functools.wraps(f)
+def report_to_file(filename=None):
+    def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
-            result = f(*args, **kwargs)
-            output_file = filename or f"report_{f.__name__}_{datetime.now().date()}.json"
-            with open(output_file, "w") as file:
-                json.dump(result, file, ensure_ascii=False, indent=2)
+            result = func(*args, **kwargs)
+
+            fname = filename or f"{func.__name__}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
+            with open(f"reports/{fname}", 'w') as f:
+                f.write(result.to_json(orient='records', force_ascii=False))
+
             return result
 
         return wrapper
 
-    return decorator(func) if func else decorator
+    return decorator
 
 
-@report_decorator
-def spending_by_category(
-        df: pd.DataFrame,
-        category: str,
-        date: Optional[str] = None
-) -> Dict[str, float]:
-    """
-    Анализ трат по категории за последние 3 месяца
-    :param df: DataFrame с транзакциями
-    :param category: Название категории
-    :param date: Опорная дата в формате 'YYYY-MM-DD'
-    :return: Словарь с суммами по месяцам
-    """
-    try:
-        end_date = pd.to_datetime(date) if date else datetime.now()
-        start_date = end_date - timedelta(days=90)
+@report_to_file()
+def spending_by_category(transactions: pd.DataFrame, category: str, date=None):
+    date = pd.to_datetime(date) if date else datetime.now()
+    start_date = date - timedelta(days=90)
 
-        filtered = df[
-            (df["Категория"] == category) &
-            (df["Дата операции"] >= start_date) &
-            (df["Дата операции"] <= end_date)
-            ]
+    filtered = transactions[
+        (transactions['Категория'] == category) &
+        (transactions['Дата операции'] >= start_date) &
+        (transactions['Дата операции'] <= date)
+        ]
 
-        return filtered.groupby(
-            filtered["Дата операции"].dt.to_period("M")
-        )["Сумма платежа"].sum().to_dict()
-    except Exception as e:
-        logger.error(f"Spending report error: {e}")
-        return {}
+    return filtered.groupby(
+        filtered['Дата операции'].dt.to_period('M')
+    )['Сумма операции'].sum().abs()
+
+
+@report_to_file()
+def spending_by_weekday(transactions: pd.DataFrame, date=None):
+    date = pd.to_datetime(date) if date else datetime.now()
+    start_date = date - timedelta(days=90)
+
+    filtered = transactions[
+        (transactions['Дата операции'] >= start_date) &
+        (transactions['Дата операции'] <= date)
+        ]
+
+    return filtered.groupby(
+        filtered['Дата операции'].dt.weekday
+    )['Сумма операции'].mean().abs()
+
+
+@report_to_file(filename='workday_spending.json')
+def spending_by_workday(transactions: pd.DataFrame, date=None):
+    date = pd.to_datetime(date) if date else datetime.now()
+    start_date = date - timedelta(days=90)
+
+    filtered = transactions[
+        (transactions['Дата операции'] >= start_date) &
+        (transactions['Дата операции'] <= date)
+        ]
+
+    is_workday = filtered['Дата операции'].dt.weekday < 5
+    return filtered.groupby(is_workday)['Сумма операции'].mean().abs()
