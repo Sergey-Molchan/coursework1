@@ -2,7 +2,6 @@ import requests
 from datetime import datetime, timedelta
 import logging
 from functools import wraps
-import os
 logger = logging.getLogger(__name__)
 
 

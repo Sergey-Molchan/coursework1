@@ -1,26 +1,25 @@
-import json
+import pandas as pd
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Optional
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
-def get_user_settings() -> Dict[str, Any]:
-    """Загрузка пользовательских настроек"""
+def load_transactions() -> pd.DataFrame:
+    """Загрузка транзакций из Excel"""
     try:
-        settings_path = Path('user_settings.json')
-        if not settings_path.exists():
-            default_settings = {
-                "user_currencies": ["USD", "EUR"],
-                "user_stocks": ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
-            }
-            with open(settings_path, 'w') as f:
-                json.dump(default_settings, f, indent=2)
-            return default_settings
+        file_path = Path('data/operations.xlsx')
+        if not file_path.exists():
+            raise FileNotFoundError(f"File {file_path} not found")
 
-        with open(settings_path) as f:
-            return json.load(f)
+        df = pd.read_excel(file_path)
+
+        # Преобразование данных
+        df['Дата'] = pd.to_datetime(df['Дата операции'], dayfirst=True)
+        df['Сумма'] = pd.to_numeric(df['Сумма операции'].astype(str).str.replace(',', '.'))
+
+        return df
     except Exception as e:
-        logging.error(f"Ошибка загрузки настроек: {e}")
-        return {}
+        logger.error(f"Error loading transactions: {e}")
+        raise

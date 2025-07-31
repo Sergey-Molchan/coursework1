@@ -1,62 +1,32 @@
-from datetime import datetime
-from src.views import generate_home_json
-from src.constants import get_greeting
-import logging
-import os
-from pathlib import Path
+from config import load_json_config
+from analyzer import analyze_data
+from formatter import format_report
 import json
-
-
-def init_project():
-    """Инициализация проекта"""
-    os.makedirs('data', exist_ok=True)
-    os.makedirs('reports', exist_ok=True)
-
-    if not Path('user_settings.json').exists():
-        with open('user_settings.json', 'w') as f:
-            json.dump({
-                "user_currencies": ["USD", "EUR"],
-                "user_stocks": ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
-            }, f, indent=2)
+from pathlib import Path
 
 
 def main():
-    init_project()
+    # Загрузка конфигурации
+    config = load_json_config()
 
-    try:
-        current_time = datetime.now()
-        print("\nТекущее время:", current_time)
-        print("Приветствие:", get_greeting(current_time))
+    # Анализ данных
+    analysis_result = analyze_data(
+        config["data_file"],
+        "2023-05-20 15:30:00"
+    )
 
-        test_date = "2023-05-20 15:30:00"
-        print("\nГлавная страница:")
-        home_data = generate_home_json(test_date)
-        print(home_data)
+    # Форматирование отчета
+    report = format_report(analysis_result)  # Теперь передается правильно
 
-    except Exception as e:
-        logging.error(f"Ошибка в main: {e}")
+    # Сохранение отчета
+    report_dir = Path(config["report_dir"])
+    report_dir.mkdir(exist_ok=True)
 
+    report_path = report_dir / "report.json"
+    with open(report_path, 'w', encoding='utf-8') as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
 
-if __name__ == "__main__":
-    main()
-
-    try:
-        # Загружаем настройки
-        settings = get_user_settings()
-
-        # Пример использования
-        test_date = "2023-05-20 15:30:00"
-        current_time = datetime.now()
-
-        print("\n1. Главная страница:")
-        print(f"Текущее время: {current_time}")
-        print(f"Приветствие: {get_greeting(current_time)}")
-
-        home_data = generate_home_json(test_date)
-        print(f"Данные главной страницы: {home_data}")
-
-    except Exception as e:
-        logging.error(f"Ошибка в main: {e}")
+    print(f"Отчет сохранен: {report_path}")
 
 
 if __name__ == "__main__":
