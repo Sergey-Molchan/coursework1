@@ -1,15 +1,14 @@
 import pandas as pd
 import logging
 from pathlib import Path
-from typing import Optional
-
+from config import DATA_FILE
 logger = logging.getLogger(__name__)
 
 
 def load_transactions() -> pd.DataFrame:
     """Загрузка транзакций из Excel"""
     try:
-        file_path = Path('data/operations.xlsx')
+        file_path = Path(DATA_FILE)
         if not file_path.exists():
             raise FileNotFoundError(f"File {file_path} not found")
 
