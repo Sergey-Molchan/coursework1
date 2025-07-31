@@ -1,21 +1,23 @@
-import os
-from views import home_view, events_view
-from services import *
-from reports import *
-import pandas as pd
-import json
+from data_loader import load_transactions
+from views import generate_home_json
+from services import find_phone_transactions
+import logging
 
-# Загрузка данных
-operations = pd.read_excel('data/operations.xlsx', sheet_name='Отчет по операциям')
-operations['Дата операции'] = pd.to_datetime(
-    operations['Дата операции'],
-    format='%d.%m.%Y %H:%M:%S',
-    dayfirst=True
-)
 
-# Проверка столбцов
-print("Столбцы в operations:", operations.columns.tolist())
+def main():
+    try:
+        # Загрузка данных
+        df = load_transactions("../data/operations.xlsx")
+
+        # Пример использования
+        print("Главная страница JSON:", generate_home_json("2023-10-15 12:00:00", df))
+        print("Транзакции с телефонами:", find_phone_transactions(df))
+
+    except Exception as e:
+        logging.error(f"Ошибка: {str(e)}")
+        print(f"Произошла ошибка: {e}. Проверьте логи для деталей.")
+
 
 if __name__ == "__main__":
-    home_data = home_view("2023-12-20 15:30:00", operations)
-    print(json.dumps(home_data, indent=2, ensure_ascii=False))
+    logging.basicConfig(filename='app.log', level=logging.ERROR)
+    main()

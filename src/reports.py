@@ -1,65 +1,22 @@
 import pandas as pd
-from datetime import datetime, timedelta
-from functools import wraps
+import json
+from datetime import datetime
+from typing import Optional
 
-
-def report_to_file(filename=None):
+def report_to_file(filename: Optional[str] = None):
     def decorator(func):
-        @wraps(func)
         def wrapper(*args, **kwargs):
             result = func(*args, **kwargs)
-
-            fname = filename or f"{func.__name__}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
-            with open(f"reports/{fname}", 'w') as f:
-                f.write(result.to_json(orient='records', force_ascii=False))
-
+            output_file = filename or f"{func.__name__}_report.json"
+            with open(output_file, 'w') as f:
+                json.dump(result, f, indent=2)
             return result
-
         return wrapper
-
     return decorator
 
-
 @report_to_file()
-def spending_by_category(transactions: pd.DataFrame, category: str, date=None):
-    date = pd.to_datetime(date) if date else datetime.now()
-    start_date = date - timedelta(days=90)
-
-    filtered = transactions[
-        (transactions['Категория'] == category) &
-        (transactions['Дата операции'] >= start_date) &
-        (transactions['Дата операции'] <= date)
-        ]
-
-    return filtered.groupby(
-        filtered['Дата операции'].dt.to_period('M')
-    )['Сумма операции'].sum().abs()
-
-
-@report_to_file()
-def spending_by_weekday(transactions: pd.DataFrame, date=None):
-    date = pd.to_datetime(date) if date else datetime.now()
-    start_date = date - timedelta(days=90)
-
-    filtered = transactions[
-        (transactions['Дата операции'] >= start_date) &
-        (transactions['Дата операции'] <= date)
-        ]
-
-    return filtered.groupby(
-        filtered['Дата операции'].dt.weekday
-    )['Сумма операции'].mean().abs()
-
-
-@report_to_file(filename='workday_spending.json')
-def spending_by_workday(transactions: pd.DataFrame, date=None):
-    date = pd.to_datetime(date) if date else datetime.now()
-    start_date = date - timedelta(days=90)
-
-    filtered = transactions[
-        (transactions['Дата операции'] >= start_date) &
-        (transactions['Дата операции'] <= date)
-        ]
-
-    is_workday = filtered['Дата операции'].dt.weekday < 5
-    return filtered.groupby(is_workday)['Сумма операции'].mean().abs()
+def spending_by_weekday(df: pd.DataFrame, date: Optional[str] = None) -> Dict:
+    """Средние траты по дням недели."""
+    target_date = datetime.now() if date is None else datetime.strptime(date, "%Y-%m-%d")
+    three_months = df[df['дата'] >= (target_date - pd.DateOffset(months=3))]
+    return three_months.groupby(three_months['дата'].dt.day_name())['сумма'].mean().to_dict()

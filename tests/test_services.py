@@ -3,6 +3,13 @@ from src.services import (
     profitable_cashback_categories,
     investment_bank
 )
+import pandas as pd
+from src.services import find_phone_transactions
+
+def test_phone_search():
+    test_data = pd.DataFrame([{"Описание": "Платеж +7 999 123-45-67"}])
+    assert len(find_phone_transactions(test_data)) == 1
+
 
 @pytest.fixture
 def sample_transactions():
