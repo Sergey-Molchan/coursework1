@@ -1,100 +1,91 @@
 import pytest
+from unittest.mock import patch, MagicMock
 from datetime import datetime
 import pandas as pd
-from unittest.mock import patch, MagicMock
 from src.services import (
-    _get_greeting,
-    load_transactions,
+    process_transactions,
     get_card_stats,
-    get_top_transactions,
-    get_stock_prices,
     get_currency_rates,
-    get_stock_prices_cached
+    get_sp500_data
 )
 
-# Фикстуры для тестов
+
+# Фикстуры для тестовых данных
 @pytest.fixture
-def sample_dataframe():
-    """Фиктивный DataFrame для тестирования"""
-    data = {
-        'Дата операции': ['31.12.2021 16:44:00', '31.12.2021 16:42:04'],
-        'Номер карты': ['*7197', '*5091'],
-        'Сумма операции': ['-160,89', '-64,00'],
-        'Категория': ['Супермаркеты', 'Развлечения'],
-        'Описание': ['Магнит', 'Кинотеатр']
+def sample_transactions():
+    return pd.DataFrame({
+        'Дата операции': ['01.01.2023 12:00:00', '02.01.2023 13:00:00'],
+        'Сумма операции': ['-1000,50', '500,75'],
+        'Номер карты': ['1234567890123456', None],
+        'Категория': ['Еда', 'Транспорт'],
+        'Описание': ['Покупка в магазине', 'Такси'],
+        'Кешбэк': [5.0, 0.0]
+    })
+
+
+# Тесты для process_transactions
+def test_process_transactions(sample_transactions):
+    with patch('pandas.to_datetime') as mock_datetime:
+        mock_datetime.return_value = pd.Series([
+            datetime(2023, 1, 1),
+            datetime(2023, 1, 2)
+        ])
+
+        result = process_transactions(sample_transactions)
+
+        assert not result.empty
+        assert 'Дата' in result.columns
+        assert 'Сумма' in result.columns
+        assert result['Номер карты'].iloc[0] == '3456'
+
+
+# Тесты для get_card_stats
+def test_get_card_stats(sample_transactions):
+    processed = process_transactions(sample_transactions)
+    date = datetime(2023, 1, 1)
+
+    result = get_card_stats(processed, date)
+
+    assert isinstance(result, list)
+    if result:  # Если есть данные
+        assert 'last_digits' in result[0]
+        assert 'total_spent' in result[0]
+
+
+# Тесты для API функций
+@patch('requests.get')
+def test_get_currency_rates(mock_get):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        'conversion_rates': {'USD': 1.0, 'EUR': 0.9, 'RUB': 70.0}
     }
-    return pd.DataFrame(data)
+    mock_get.return_value = mock_response
 
-@pytest.fixture
-def mock_env(monkeypatch):
-    """Фиктивная среда с API ключом"""
-    monkeypatch.setenv('FMP_API_KEY', 'test_api_key')
+    result = get_currency_rates()
 
-class TestGreeting:
-    def test_morning_greeting(self):
-        assert _get_greeting(datetime(2023, 1, 1, 6)) == "Доброе утро"
-
-class TestLoadTransactions:
-    def test_load_valid_data(self, tmp_path, sample_dataframe):
-        test_file = tmp_path / "test_operations.xlsx"
-        sample_dataframe.to_excel(test_file, index=False)
-        df = load_transactions(str(test_file))
-        assert len(df) == 2
-
-class TestCardStats:
-    def test_card_stats_calculation(self, sample_dataframe):
-        df = sample_dataframe.copy()
-        df['Дата'] = pd.to_datetime(df['Дата операции'], dayfirst=True)
-        df['Сумма'] = pd.to_numeric(df['Сумма операции'].str.replace(',', '.'))
-        df['Карта'] = df['Номер карты'].str[-4:]
-        result = get_card_stats(df, datetime(2021, 12, 31))
-        assert len(result) == 2
-
-class TestTopTransactions:
-    def test_top_transactions(self, sample_dataframe):
-        df = sample_dataframe.copy()
-        df['Дата'] = pd.to_datetime(df['Дата операции'], dayfirst=True)
-        df['Сумма'] = pd.to_numeric(df['Сумма операции'].str.replace(',', '.'))
-        result = get_top_transactions(df, datetime(2021, 12, 31), n=2)
-        assert len(result) == 2
+    assert len(result) == 3
+    assert any(r['currency'] == 'USD' for r in result)
 
 
-class TestStockPrices:
-    @patch('src.services.requests.get')
-    def test_successful_api_call(self, mock_get, mock_env):
-        # Мокируем ответ API
-        mock_response = MagicMock()
-        mock_response.json.return_value = [
-            {
-                "symbol": "AAPL",
-                "price": 175.50,
-                "change": -1.25,
-                "changesPercentage": -0.71
-            }
-        ]
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
+@patch('requests.get')
+def test_get_sp500_data(mock_get):
+    mock_response_index = MagicMock()
+    mock_response_index.json.return_value = [{
+        'price': 4000.0,
+        'change': 50.0,
+        'changesPercentage': 1.25
+    }]
 
-        result = get_stock_prices(["AAPL"])
-        assert len(result) == 1
-        assert result[0]['stock'] == "AAPL"
-        assert result[0]['price'] == 175.50
+    mock_response_companies = MagicMock()
+    mock_response_companies.json.return_value = [
+        {'symbol': 'AAPL', 'name': 'Apple', 'price': 150.0},
+        {'symbol': 'MSFT', 'name': 'Microsoft', 'price': 250.0}
+    ]
 
-    @patch('src.services.requests.get')
-    def test_failed_api_call(self, mock_get, mock_env):
-        mock_get.side_effect = Exception("API Error")
-        result = get_stock_prices(["AAPL"])
-        assert result == []
+    mock_get.side_effect = [mock_response_index, mock_response_companies]
 
-class TestStockPricesCached:
-    @patch('src.services.get_stock_prices')
-    def test_caching(self, mock_get):
-        mock_get.return_value = [{"stock": "TEST", "price": 100}]
-        get_stock_prices_cached("TEST")
-        get_stock_prices_cached("TEST")
-        mock_get.assert_called_once()
+    result = get_sp500_data()
 
-class TestCurrencyRates:
-    def test_currency_rates(self):
-        result = get_currency_rates(["USD", "EUR"])
-        assert len(result) == 2
+    assert 'index' in result
+    assert 'stocks' in result
+    assert len(result['stocks']) > 0

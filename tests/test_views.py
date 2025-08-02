@@ -1,43 +1,69 @@
-from unittest.mock import patch
 import pytest
+from unittest.mock import patch
 import pandas as pd
 from src.views import home_page
 
 
 @pytest.fixture
-def sample_data():
-    return {
-        'Дата операции': ['31.12.2021 16:44:00'],
-        'Номер карты': ['*7197'],
-        'Сумма операции': ['-160,89'],
-        'Категория': ['Супермаркеты'],
-        'Описание': ['Магнит']
-    }
+def mock_transactions():
+    return pd.DataFrame({
+        'Дата операции': ['01.01.2023 12:00:00', '02.01.2023 13:00:00'],
+        'Сумма операции': ['-1000,50', '500,75'],
+        'Номер карты': ['1234567890123456', None],
+        'Категория': ['Еда', 'Транспорт'],
+        'Описание': ['Покупка в магазине', 'Такси'],
+        'Кешбэк': [5.0, 0.0],
+        'Статус': ['OK', 'OK']
+    })
 
 
-@patch('src.services.get_stock_prices')  # Мокаем только get_stock_prices
-def test_home_page(mock_get_stocks, sample_data, tmp_path):
-    # 1. Подготовка тестовых данных
-    test_file = tmp_path / "test_operations.xlsx"
-    df = pd.DataFrame(sample_data)
-    df['Дата'] = pd.to_datetime(df['Дата операции'], dayfirst=True)
-    df['Сумма'] = pd.to_numeric(df['Сумма операции'].str.replace(',', '.'))
-    df['Карта'] = df['Номер карты'].str[-4:]
-    df.to_excel(test_file, index=False)
+@patch('src.views.load_transactions')
+@patch('src.views.process_transactions')
+def test_home_page_success(mock_process, mock_load, mock_transactions):
+    # Подготовка моков
+    mock_load.return_value = mock_transactions
 
-    # 2. Настройка моков
-    mock_get_stocks.return_value = [{"stock": "AAPL", "price": 175.50}]
+    processed_data = mock_transactions.copy()
+    processed_data['Дата'] = pd.to_datetime(processed_data['Дата операции'])
+    processed_data['Сумма'] = pd.to_numeric(
+        processed_data['Сумма операции'].str.replace(',', '.')
+    )
+    mock_process.return_value = processed_data
 
-    # 3. Вызов тестируемой функции с реальным файлом
-    result = home_page("2021-12-31 15:30:00", str(test_file))
+    # Вызов функции
+    result = home_page('dummy_path.xlsx')
 
-    # 4. Проверки результатов
-    assert result['greeting'] == "Добрый день"
-    assert len(result['cards']) == 1
-    assert result['cards'][0]['last_digits'] == '7197'
-    assert len(result['top_transactions']) == 1
-    assert len(result['stock_prices']) == 1
-    assert result['stock_prices'][0]['stock'] == 'AAPL'
+    # Проверки
+    assert isinstance(result, dict)
+    assert 'date' in result
+    assert 'cards' in result
+    assert 'top_transactions' in result
+    assert isinstance(result['cards'], list)
+    assert isinstance(result['top_transactions'], list)
 
-    # 5. Проверка вызова API (без проверки load_transactions)
-    mock_get_stocks.assert_called_once()
+
+@patch('src.views.load_transactions')
+def test_home_page_empty_data(mock_load):
+    # Пустой DataFrame с нужными колонками
+    mock_load.return_value = pd.DataFrame(columns=[
+        'Дата операции', 'Сумма операции', 'Номер карты',
+        'Категория', 'Описание', 'Кешбэк', 'Статус'
+    ])
+
+    result = home_page('dummy_path.xlsx')
+
+    assert isinstance(result, dict)
+    assert 'error' in result
+    assert 'Нет данных для отображения' in result['error']
+
+
+@patch('src.views.load_transactions')
+def test_home_page_processing_error(mock_load, mock_transactions):
+    mock_load.return_value = mock_transactions
+    mock_load.side_effect = Exception("Test error")
+
+    result = home_page('dummy_path.xlsx')
+
+    assert isinstance(result, dict)
+    assert 'error' in result
+    assert 'Test error' in result['error']

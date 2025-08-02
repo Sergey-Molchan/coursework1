@@ -1,24 +1,22 @@
 import pandas as pd
 import logging
-from pathlib import Path
-from config import DATA_FILE
+
 logger = logging.getLogger(__name__)
 
 
-def load_transactions() -> pd.DataFrame:
-    """Загрузка транзакций из Excel"""
+def load_transactions(file_path: str) -> pd.DataFrame:
+    """Загрузка данных с минимальными требованиями"""
     try:
-        file_path = Path(DATA_FILE)
-        if not file_path.exists():
-            raise FileNotFoundError(f"File {file_path} not found")
-
         df = pd.read_excel(file_path)
 
-        # Преобразование данных
-        df['Дата'] = pd.to_datetime(df['Дата операции'], dayfirst=True)
-        df['Сумма'] = pd.to_numeric(df['Сумма операции'].astype(str).str.replace(',', '.'))
+        # Абсолютно необходимые колонки
+        required_columns = ['Дата операции', 'Сумма операции']
+        missing_cols = [col for col in required_columns if col not in df.columns]
+
+        if missing_cols:
+            raise ValueError(f"Отсутствуют обязательные колонки: {missing_cols}")
 
         return df
     except Exception as e:
-        logger.error(f"Error loading transactions: {e}")
+        logger.error(f"Ошибка загрузки файла: {e}")
         raise

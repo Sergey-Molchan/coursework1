@@ -1,49 +1,62 @@
-Описание проекта
+# Финансовый анализатор расходов
 
-Финансовый дашборд для анализа банковских операций с интеграцией с Financial Modeling Prep API для получения данных об акциях. Проект разработан как курсовая работа и предоставляет:
 
-Анализ расходов по банковским картам
-Расчет кэшбэка (1% от суммы расходов)
-Топ-5 самых крупных транзакций
-Актуальные котировки акций
-Особенности
+Приложение для анализа банковских транзакций с возможностью просмотра:
+- Расходов по категориям
+- Топовых транзакций
+- Курсов валют
+- Данных по S&P500
 
-📊 Загрузка и обработка банковских операций из Excel
-💳 Анализ расходов по картам
-📈 Получение данных об акциях через API
-⏳ Кэширование запросов к API (5 минут)
-🛠 Гибкая настройка через конфигурационные файлы
-Установка и настройка
+## Установка
 
-Требования
+1. Клонируйте репозиторий:
 
-Python 3.9+
-pip
-Клонируйте репозиторий:
-git clone https://github.com/yourusername/financial-dashboard.git
-cd financial-dashboard
-Создайте и активируйте виртуальное окружение:
-python -m venv venv
-source venv/bin/activate  # Linux/MacOS
-venv\Scripts\activate  # Windows
+git clone https://github.com/Sergey-Molchan/coursework1
+cd finance-analyzer
 Установите зависимости:
-pip install -r requirements.txt
-Создайте файл .env и добавьте API ключ:
+bash
+poetry install
+Создайте файл .env по образцу:
 ini
-FMP_API_KEY=your_api_key_here
-DATA_FILE=path/to/your/operations.xlsx
+EXCHANGE_RATE_API_KEY=your_api_key #регистрация по адресу https://app.exchangerate-api.com/activate-account
+FMP_API_KEY=your_api_key  #регистрация по адресу https://site.financialmodelingprep.com/developer/docs
+Использование
+
+Запуск приложения:
+
+
+python3 main.py
+Тестирование:
+
+
+pytest tests/
+Проверка стиля кода:
+
 
 Структура проекта
 
+coursework1/
+├── data/                  # Файлы с транзакциями (operations.xlsx)
+├── src/                   # Исходный код
+│   ├── main.py            # Точка входа
+│   ├── services.py        # Бизнес-логика и API-интеграции
+│   ├── views.py           # Представления и обработка запросов
+│   ├── reports.py         # Генерация отчетов
+│   └── utils.py           # Вспомогательные функции
+├── tests/                 # Тесты
+├── .env.example           # Пример конфигурации
+├── pyproject.toml         # Конфигурация проекта
+└── README.md              # Документация
+API
 
-financial-dashboard/
-├── data/                   # Папка с данными
-│   └── operations.xlsx     # Пример файла с операциями
-├── src/
-│   ├── __init__.py
-│   ├── main.py             # Главный скрипт
-│   ├── services.py         # Бизнес-логика
-│   └── views.py            # Представления
-├── .env.example            # Пример конфигурации
-├── requirements.txt        # Зависимости
-└── README.md               # Этот файл
+Приложение возвращает JSON с данными:
+
+json
+{
+  "greeting": "Добрый день",
+  "cards": [...],
+  "top_transactions": [...],
+  "currency_rates": [...],
+  "sp500": {...}
+}
+

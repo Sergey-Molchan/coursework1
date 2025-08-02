@@ -1,27 +1,31 @@
-from datetime import datetime
+import logging
 from typing import Dict, Any
-from src.services import (
-    load_transactions,
-    get_card_stats,
-    get_top_transactions,
-    get_stock_prices_cached,
-    get_ttl_hash,
-    _get_greeting
-)
+from .services import process_transactions, get_card_stats, get_top_transactions
+from .utils import load_transactions
 
-def home_page(date_str: str, data_file: str) -> Dict[str, Any]:
-    """Главная страница - генерация JSON"""
+logger = logging.getLogger(__name__)
+
+
+def home_page(data_file: str) -> Dict[str, Any]:
+    """Главная страница с максимальной устойчивостью"""
     try:
-        date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-        df = load_transactions(data_file)
+        raw_df = load_transactions(data_file)
+        df = process_transactions(raw_df)
+
+        if df.empty:
+            return {"error": "Нет данных для отображения"}
+
+        date = df['Дата'].max()
 
         return {
-            "greeting": _get_greeting(date),
+            "date": date.strftime('%d.%m.%Y'),
             "cards": get_card_stats(df, date),
             "top_transactions": get_top_transactions(df, date),
-            "stock_prices": get_stock_prices_cached(','.join(["AAPL", "GOOGL"]), get_ttl_hash())
+            "available_columns": raw_df.columns.tolist()
         }
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Error in home_page: {e}")
-        raise
+        logger.error(f"Ошибка формирования главной страницы: {e}")
+        return {
+            "error": str(e),
+            "available_columns": raw_df.columns.tolist() if 'raw_df' in locals() else []
+        }
