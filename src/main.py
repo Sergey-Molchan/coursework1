@@ -29,6 +29,7 @@ if not DATA_FILE.exists():
 
 print(f"Файл найден: {DATA_FILE}")  # Для отладки
 
+
 def generate_response() -> dict:
     """
     Генерирует полный JSON-ответ для веб-страницы

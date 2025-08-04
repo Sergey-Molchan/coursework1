@@ -152,9 +152,9 @@ def get_top_transactions(df: pd.DataFrame, date: datetime, n: int = 5) -> List[D
     """Топ транзакций с защитой от отсутствия данных"""
     try:
         day_data = df[
-            (df['Дата'].dt.date == date.date()) &
-            (df['Сумма'] < 0)
-            ].copy()
+            (df['Дата'].dt.date == date.date())
+            & (df['Сумма'] < 0)
+        ].copy()
 
         day_data['Сумма'] = day_data['Сумма'].abs()
         top = day_data.nlargest(n, 'Сумма')
@@ -168,4 +168,3 @@ def get_top_transactions(df: pd.DataFrame, date: datetime, n: int = 5) -> List[D
     except Exception as e:
         logger.error(f"Ошибка в get_top_transactions: {e}")
         return []
-

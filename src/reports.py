@@ -16,10 +16,10 @@ def spending_by_category(category: str, date: Optional[str] = None) -> Dict[str,
         start_date = end_date - timedelta(days=90)
 
         filtered = df[
-            (df['Категория'] == category) &
-            (df['Дата'] >= start_date) &
-            (df['Дата'] <= end_date)
-            ]
+            (df['Категория'] == category)
+            & (df['Дата'] >= start_date)
+            & (df['Дата'] <= end_date)
+        ]
 
         result = filtered.groupby(filtered['Дата'].dt.to_period('M'))['Сумма'].sum()
         return {str(k): round(abs(v), 2) for k, v in result.to_dict().items()}
