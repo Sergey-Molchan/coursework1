@@ -8,15 +8,18 @@ logger = logging.getLogger(__name__)
 
 def home_page(data_file: str) -> Dict[str, Any]:
     """Главная страница с максимальной устойчивостью"""
+    raw_df = None
     try:
         raw_df = load_transactions(data_file)
         df = process_transactions(raw_df)
 
         if df.empty:
-            return {"error": "Нет данных для отображения"}
+            return {
+                "error": "Нет данных для отображения",
+                "available_columns": raw_df.columns.tolist()
+            }
 
         date = df['Дата'].max()
-
         return {
             "date": date.strftime('%d.%m.%Y'),
             "cards": get_card_stats(df, date),
@@ -26,6 +29,6 @@ def home_page(data_file: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Ошибка формирования главной страницы: {e}")
         return {
-            "error": str(e),
-            "available_columns": raw_df.columns.tolist() if 'raw_df' in locals() else []
+            "error": str(e),  # Возвращаем оригинальное сообщение об ошибке
+            "available_columns": raw_df.columns.tolist() if raw_df is not None else []
         }

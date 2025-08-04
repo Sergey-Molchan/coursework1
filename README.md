@@ -60,3 +60,8 @@ json
   "sp500": {...}
 }
 
+## Настройка окружения
+
+1. Скопируйте `.env.example` в `.env`:
+   ```bash
+   cp .env.example .env

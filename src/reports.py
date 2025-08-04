@@ -2,14 +2,16 @@ from datetime import datetime, timedelta
 import logging
 from typing import Dict, Optional
 from .utils import load_transactions
-
+from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
 def spending_by_category(category: str, date: Optional[str] = None) -> Dict[str, float]:
     """Траты по категории за последние 3 месяца"""
     try:
-        df = load_transactions()
+        file_path = Path(__file__).parent.parent / "data" / "transactions.xlsx"
+        df = load_transactions(str(file_path))
+
         end_date = datetime.strptime(date, "%Y-%m-%d") if date else datetime.now()
         start_date = end_date - timedelta(days=90)
 

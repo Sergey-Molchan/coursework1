@@ -4,6 +4,11 @@ import json
 from datetime import datetime
 from src.views import home_page
 from src.services import get_currency_rates, get_sp500_data, get_greeting
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 
 # Настройка логирования
 logging.basicConfig(
@@ -16,8 +21,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DATA_FILE = Path("/Users/sergejmolcan/coursework1/data/operations.xlsx")
+PROJECT_ROOT = Path(__file__).parent.parent
+DATA_FILE = PROJECT_ROOT / "data" / "operations.xlsx"
 
+if not DATA_FILE.exists():
+    raise FileNotFoundError(f"Файл не найден: {DATA_FILE}. Проверьте структуру проекта.")
+
+print(f"Файл найден: {DATA_FILE}")  # Для отладки
 
 def generate_response() -> dict:
     """
