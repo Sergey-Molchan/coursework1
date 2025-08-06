@@ -1,26 +1,57 @@
-import json
+import pandas as pd
 import logging
-from pathlib import Path
-from typing import Dict, Any
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from dotenv import load_dotenv
+import os
 
 
-def get_user_settings() -> Dict[str, Any]:
-    """Загрузка пользовательских настроек"""
+logger = logging.getLogger(__name__)
+load_dotenv()
+
+
+def load_transactions(file_path: str) -> pd.DataFrame:
+    """
+    Загружает транзакции из Excel-файла.
+
+    Args:
+        file_path: Путь к файлу (.xlsx).
+
+    Returns:
+        pd.DataFrame: DataFrame с колонками ['Дата операции', 'Сумма операции'].
+
+    Raises:
+        FileNotFoundError: Если файл не существует.
+        ValueError: Если данные невалидны.
+        Exception: Другие ошибки.
+    """
     try:
-        settings_path = Path('user_settings.json')
-        if not settings_path.exists():
-            default_settings = {
-                "user_currencies": ["USD", "EUR"],
-                "user_stocks": ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
-            }
-            with open(settings_path, 'w') as f:
-                json.dump(default_settings, f, indent=2)
-            return default_settings
+        # Проверка существования файла
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Файл не найден: {file_path}")
 
-        with open(settings_path) as f:
-            return json.load(f)
+        df = pd.read_excel(file_path)
+
+        # Проверка колонок
+        required_columns = ['Дата операции', 'Сумма операции']
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Отсутствуют колонки: {missing_cols}")
+
+        # Парсинг дат
+        df['Дата операции'] = pd.to_datetime(
+            df['Дата операции'],
+            format='%d.%m.%Y %H:%M:%S',
+            dayfirst=True,
+            errors='raise'
+        )
+
+        return df
+
+    except FileNotFoundError as e:
+        logger.error(f"Ошибка: {e}")
+        raise
+    except ValueError as e:
+        logger.error(f"Ошибка данных: {e}")
+        raise
     except Exception as e:
-        logging.error(f"Ошибка загрузки настроек: {e}")
-        return {}
+        logger.error(f"Неизвестная ошибка: {e}")
+        raise

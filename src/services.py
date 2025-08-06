@@ -1,97 +1,170 @@
-from typing import List, Dict, Any
+import requests
+import os
+from datetime import datetime
 import logging
-from src.views import load_transactions
+from typing import Dict, List, Any
+import pandas as pd
+from functools import lru_cache
+from dotenv import load_dotenv
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+load_dotenv()
+logger = logging.getLogger(__name__)
 
 
-def profitable_cashback_categories(year: int, month: int) -> Dict[str, float]:
-    """Анализ выгодных категорий для кешбэка"""
+# API Services
+@lru_cache(maxsize=32)
+def get_currency_rates(base: str = "USD") -> List[Dict[str, float]]:
+    """Получение курсов валют через ExchangeRate-API"""
     try:
-        df = load_transactions()
-        filtered = df[
-            (df['Дата'].dt.year == year) &
-            (df['Дата'].dt.month == month) &
-            (df['Сумма'] < 0)  # Только расходы
-            ]
+        api_key = os.getenv("EXCHANGE_RATE_API_KEY")
+        if not api_key:
+            raise ValueError("EXCHANGE_RATE_API_KEY not set in .env")
 
-        # Используем колонку кешбэка, если она есть
-        if 'Кешбэк' in filtered.columns:
-            result = filtered.groupby('Категория')['Кешбэк'].sum().sort_values(ascending=False)
-        else:
-            # Если нет колонки кешбэка, рассчитываем 1% от суммы
-            result = filtered.groupby('Категория')['Сумма'].sum().apply(
-                lambda x: round(abs(x) * 0.01, 2)
-            ).sort_values(ascending=False)
+        response = requests.get(
+            f"https://v6.exchangerate-api.com/v6/{api_key}/latest/{base}",
+            timeout=10
+        )
+        response.raise_for_status()
+        data = response.json()
 
-        return result.to_dict()
+        return [
+            {"currency": "USD", "rate": round(data["conversion_rates"]["USD"], 2)},
+            {"currency": "EUR", "rate": round(data["conversion_rates"]["EUR"], 2)},
+            {"currency": "RUB", "rate": round(data["conversion_rates"]["RUB"], 2)}
+        ]
     except Exception as e:
-        logging.error(f"Ошибка в profitable_cashback_categories: {e}")
+        logger.error(f"Currency API error: {e}")
+        return []
+
+
+@lru_cache(maxsize=32)
+def get_sp500_data() -> Dict[str, Any]:
+    """Получение данных S&P 500 через Financial Modeling Prep"""
+    try:
+        api_key = os.getenv("FMP_API_KEY")
+        if not api_key:
+            raise ValueError("FMP_API_KEY not set in .env")
+
+        # Получаем данные индекса
+        index_response = requests.get(
+            f"https://financialmodelingprep.com/api/v3/quote/%5EGSPC?apikey={api_key}",
+            timeout=10
+        )
+        index_response.raise_for_status()
+        index_data = index_response.json()[0]
+
+        # Получаем топ-5 компаний
+        companies_response = requests.get(
+            f"https://financialmodelingprep.com/api/v3/sp500_constituent?apikey={api_key}",
+            timeout=10
+        )
+        companies_response.raise_for_status()
+        top_companies = companies_response.json()[:5]
+
+        return {
+            "index": {
+                "symbol": "^GSPC",
+                "price": round(index_data["price"], 2),
+                "change": round(index_data["change"], 2),
+                "change_percent": round(index_data["changesPercentage"], 2)
+            },
+            "stocks": [{
+                "symbol": company["symbol"],
+                "price": round(float(company.get("price", 0)), 2),
+                "name": company["name"]
+            } for company in top_companies]
+        }
+    except Exception as e:
+        logger.error(f"Stock API error: {e}")
         return {}
 
 
-def investment_bank(month: str, limit: int = 50) -> float:
-    """Расчёт инвесткопилки с округлением"""
+# Основные сервисы
+def get_greeting() -> str:
+    """Приветствие по времени суток"""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Доброе утро"
+    elif 12 <= hour < 17:
+        return "Добрый день"
+    elif 17 <= hour < 23:
+        return "Добрый вечер"
+    return "Доброй ночи"
+
+
+def process_transactions(df: pd.DataFrame) -> pd.DataFrame:
+    """Подготовка данных с автозаполнением отсутствующих колонок"""
     try:
-        df = load_transactions()
-        year, month = map(int, month.split('-'))
+        # Базовые преобразования
+        df['Дата'] = pd.to_datetime(df['Дата операции'], format='%d.%m.%Y %H:%M:%S', errors='coerce')
+        df['Сумма'] = pd.to_numeric(df['Сумма операции'].astype(str).str.replace(',', '.'), errors='coerce')
 
-        filtered = df[
-            (df['Дата'].dt.year == year) &
-            (df['Дата'].dt.month == month) &
-            (df['Сумма'] < 0)  # Только расходы
-            ]
+        # Заполняем отсутствующие колонки
+        if 'Номер карты' not in df.columns:
+            df['Номер карты'] = ''
+        else:
+            df['Номер карты'] = df['Номер карты'].fillna('').astype(str).str[-4:]
 
-        # Используем колонку округления, если она есть
-        if 'Округление' in filtered.columns:
-            return round(filtered['Округление'].sum(), 2)
+        if 'Статус' not in df.columns:
+            df['Статус'] = 'OK'
 
-        # Если колонки округления нет, рассчитываем вручную
-        def round_amount(x):
-            return limit * round(abs(x) / limit)
+        if 'Категория' not in df.columns:
+            df['Категория'] = 'Другое'
 
-        total_round = filtered['Сумма'].apply(
-            lambda x: round_amount(x) + x
-        ).sum()
+        if 'Описание' not in df.columns:
+            df['Описание'] = ''
 
-        return round(abs(total_round), 2)
+        if 'Кешбэк' not in df.columns:
+            df['Кешбэк'] = 0.0
+
+        return df.dropna(subset=['Дата', 'Сумма'])
     except Exception as e:
-        logging.error(f"Ошибка в investment_bank: {e}")
-        return 0.0
+        logger.error(f"Ошибка обработки данных: {e}")
+        raise
 
 
-def search_transactions(query: str) -> List[Dict[str, Any]]:
-    """Поиск транзакций по строке"""
+def get_card_stats(df: pd.DataFrame, date: datetime) -> List[Dict[str, Any]]:
+    """Статистика по картам с защитой от отсутствия данных"""
     try:
-        df = load_transactions()
-        mask = df['Описание'].str.contains(query, case=False, na=False) | \
-               df['Категория'].str.contains(query, case=False, na=False)
-        return df[mask].to_dict('records')
+        day_data = df[df['Дата'].dt.date == date.date()]
+        cards = []
+
+        for card in day_data['Номер карты'].unique():
+            if not card:
+                continue
+
+            card_data = day_data[day_data['Номер карты'] == card]
+            spent = card_data[card_data['Сумма'] < 0]['Сумма'].sum() * -1
+
+            cards.append({
+                "last_digits": card,
+                "total_spent": round(float(spent), 2),
+                "cashback": round(float(card_data['Кешбэк'].sum()), 2)
+            })
+
+        return cards
     except Exception as e:
-        logging.error(f"Ошибка в search_transactions: {e}")
+        logger.error(f"Ошибка в get_card_stats: {e}")
         return []
 
 
-def find_phone_transactions() -> List[Dict[str, Any]]:
-    """Поиск транзакций с номерами телефонов"""
+def get_top_transactions(df: pd.DataFrame, date: datetime, n: int = 5) -> List[Dict[str, Any]]:
+    """Топ транзакций с защитой от отсутствия данных"""
     try:
-        df = load_transactions()
-        phone_pattern = r'(\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}'
-        mask = df['Описание'].str.contains(phone_pattern, regex=True, na=False)
-        return df[mask].to_dict('records')
-    except Exception as e:
-        logging.error(f"Ошибка в find_phone_transactions: {e}")
-        return []
+        day_data = df[
+            (df['Дата'].dt.date == date.date())
+            & (df['Сумма'] < 0)
+        ].copy()
 
+        day_data['Сумма'] = day_data['Сумма'].abs()
+        top = day_data.nlargest(n, 'Сумма')
 
-def find_person_transfers() -> List[Dict[str, Any]]:
-    """Поиск переводов физлицам"""
-    try:
-        df = load_transactions()
-        pattern = r'[А-Я][а-я]+\s[А-Я]\.'  # Имя и первая буква фамилии с точкой
-        mask = (df['Категория'] == 'Переводы') & \
-               (df['Описание'].str.contains(pattern, na=False))
-        return df[mask].to_dict('records')
+        return [{
+            'date': row['Дата'].strftime('%d.%m.%Y'),
+            'amount': abs(row['Сумма']),
+            'category': row.get('Категория', 'Другое'),
+            'description': row.get('Описание', '')
+        } for _, row in top.iterrows()]
     except Exception as e:
-        logging.error(f"Ошибка в find_person_transfers: {e}")
+        logger.error(f"Ошибка в get_top_transactions: {e}")
         return []
